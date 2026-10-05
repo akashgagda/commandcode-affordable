@@ -2,7 +2,7 @@
 
 a Hermes Agent profile for [CommandCode](https://commandcode.ai/) users who want to keep spend low.
 
-v0.1.0. prices and model ids below were read on **2026-10-05** from
+v0.1.1. prices and model ids below were read on **2026-10-05** from
 `https://api.commandcode.ai/provider/v1/models` and `https://commandcode.ai/models`.
 CommandCode changes its catalog and its deals, so check those two pages before
 relying on any number here.
@@ -16,7 +16,7 @@ sessions, naming sessions, and classifying risky shell commands. with the defaul
 on an expensive main model, every screenshot and every compression is billed at
 that model's rate.
 
-this profile pins each side task to a cheap — or free — CommandCode model. the
+this profile pins each side task to a cheap paid CommandCode model. the
 main model is cheap too. if you switch to a stronger model with `/model` for a
 hard turn, the side tasks stay on their own models and their cost does not change.
 
@@ -53,12 +53,16 @@ you go, $15/mo) or GOAT/Pro/Max. the $1 Go plan has no API access.
 - approval classifier: `z-ai/glm-5.3-flash` at low reasoning. **$0.15/$0.50**, and
   the highest published Intelligence Index (41.8) of any cheap model in the
   catalog — this is the slot where a miss is expensive.
-- titles, skills hub, MCP dispatch, profile descriptions, kanban triage, mail
-  scoring, TTS audio tags and memory query rewrite: `inclusionai/ling-3.1-flash:free`
-  — **free**, 262K context. `triage_specifier` gets a second free lane
-  (`inclusionai/ling-3.0-flash-sante:free`) before it pays.
-- every pinned slot carries a paid fallback (`z-ai/glm-5.3-flash`, $0.15/$0.50),
-  so the profile keeps working the day a free preview ends.
+- titles, skills hub, MCP dispatch, profile descriptions, mail scoring, TTS audio
+  tags and memory query rewrite: `gpt-6-luna` — **$0.10 in / $0.50 out per million,
+  cache read $0.01**, the cheapest input price of any scored model in the catalog.
+  these calls turn a few thousand input tokens into a handful of output tokens, so
+  input price dominates their bill.
+- kanban triage (`triage_specifier`) writes a spec rather than a few tokens, so it
+  gets `z-ai/glm-5.3-flash` instead.
+- every pinned slot carries a paid model behind it: `z-ai/glm-5.3-flash` for the
+  `gpt-6-luna` slots, `deepseek/deepseek-v4.1-flash` for `triage_specifier`.
+- **no free or stealth lanes.** the free tier is not used anywhere (see changelog).
 - `display.show_cost: true`, so spend shows in the status bar.
 
 these stay on your main model on purpose: `background_review` (it writes your
@@ -77,8 +81,8 @@ Friday only**, at 2×:
 | peak | 01–04 & 06–10 UTC, Mon–Fri | $0.30 | $1.20 |
 
 for IST that is **06:30–09:30 and 11:30–15:30, weekdays** — both right in the
-working day. weekends are always off-peak. `z-ai/glm-5.3-flash`, `Qwen/Qwen3.8-Flash`,
-`xiaomi/mimo-v2.6-flash` and the free models are flat-priced, so they are not
+working day. weekends are always off-peak. `z-ai/glm-5.3-flash`, `gpt-6-luna`,
+`Qwen/Qwen3.8-Flash` and `xiaomi/mimo-v2.6-flash` are flat-priced, so they are not
 affected; only the DeepSeek lanes (main, vision, compression) are.
 
 if you want a flat main model instead, `/model` over to `z-ai/glm-5.3-flash`
@@ -99,11 +103,11 @@ hermes config set auxiliary.compression.model deepseek/deepseek-v4.1-flash
 hermes config set auxiliary.approval.provider commandcode
 hermes config set auxiliary.approval.model z-ai/glm-5.3-flash
 hermes config set auxiliary.title_generation.provider commandcode
-hermes config set auxiliary.title_generation.model inclusionai/ling-3.1-flash:free
+hermes config set auxiliary.title_generation.model gpt-6-luna
 hermes config set auxiliary.skills_hub.provider commandcode
-hermes config set auxiliary.skills_hub.model inclusionai/ling-3.1-flash:free
+hermes config set auxiliary.skills_hub.model gpt-6-luna
 hermes config set auxiliary.memory_query_rewrite.provider commandcode
-hermes config set auxiliary.memory_query_rewrite.model inclusionai/ling-3.1-flash:free
+hermes config set auxiliary.memory_query_rewrite.model gpt-6-luna
 ```
 
 (or `hermes model` → "Configure auxiliary models" for the interactive form —
@@ -123,28 +127,49 @@ on 2026-10-05:
 - **prices and Intelligence Index scores** read from the models table and the
   individual model pages on `https://commandcode.ai/models`. the scores quoted
   (39.5, 41.8, 34.8) are CommandCode's own published numbers.
-- **free tier** confirmed on the models page: `inclusionai/ling-3.1-flash:free`,
-  `inclusionai/ling-3.0-flash-sante:free`, `stealth/space-bunny-alpha` and
-  `poolside/laguna-s-2.1-free` are listed as free "while it lasts". that is why
-  every free slot has a paid fallback.
+- **no free lanes**: CommandCode lists four models as free "while it lasts"
+  (`inclusionai/ling-3.1-flash:free`, `inclusionai/ling-3.0-flash-sante:free`,
+  `stealth/space-bunny-alpha`, `poolside/laguna-s-2.1-free`). none is used here. a
+  lane that can vanish, throttle, or change behaviour without notice is a silent
+  failure in a session title, a memory query or an approval check, and the saving
+  is a fraction of a cent per call. every slot names a paid model.
 - **resolution**: the profile was installed with `hermes profile install` (v0.21.5)
   and every pinned auxiliary task was read back with `hermes config get
   auxiliary.<task>.model`, which returns the value Hermes' own config resolver
   uses. `hermes status` reports the profile's main model and provider correctly.
   every model id in `config.yaml` was then diffed against the live
-  `provider/v1/models` catalog: all 7 ids are served, and the context windows
+  `provider/v1/models` catalog: all 6 ids are served, and the context windows
   match what is claimed above. that is an integration check, not a model-quality
   test. (`auxiliary.<task>.fallback_chain` is a list, so `config get` does not
   recognise it as a leaf key and prints a warning — the key is read at runtime by
   `_try_configured_fallback_chain` in `agent/auxiliary_client.py`.)
 
-**not measured:** whether `ling-3.1-flash:free` actually names a session well,
+**not measured:** whether `gpt-6-luna` actually names a session well,
 whether `glm-5.3-flash` classifies risky shell commands as reliably as its index
 score suggests, and whether `deepseek-v4-flash-vision-exp` reads an invoice
 correctly. the slots were assigned by published price and published score, not by
 running the tasks. a measured pass — a small vision and approval suite, a few
 cents of credits — would replace this section with real results; ask if you want
 that run before trusting the pins.
+
+## changelog
+
+### v0.1.1 — 2026-10-05
+
+- **removed every free and stealth lane.** `title_generation`, `skills_hub`, `mcp`,
+  `profile_describer`, `monitor`, `tts_audio_tags` and `memory_query_rewrite` moved
+  from `inclusionai/ling-3.1-flash:free` to `gpt-6-luna`; `triage_specifier` moved
+  to `z-ai/glm-5.3-flash`. each keeps a paid fallback.
+- why: a free lane is free "while it lasts". when it ends or throttles, the slot
+  fails or silently degrades, and the symptom is a missing title or a skipped
+  skills lookup rather than an error anyone notices. the saving was a fraction of a
+  cent per call. a paid model with a documented price is worth more than a free one
+  with an unknown lifetime.
+
+### v0.1.0 — 2026-10-05
+
+- first version: main model and every auxiliary slot pinned, with the eight
+  high-volume slots riding CommandCode's free tier.
 
 ## licence
 

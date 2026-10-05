@@ -1,4 +1,4 @@
-# commandcode-affordable v0.1.0
+# commandcode-affordable v0.1.1
 # Every model below is a CommandCode model id, exactly as
 # https://api.commandcode.ai/provider/v1/models returns it.
 # Prices are CommandCode's published list prices, read 2026-10-05 from
@@ -8,12 +8,14 @@
 # your MAIN model. Pinning them here means you can /model up to an expensive model
 # for a hard turn while vision, compression, titles and approvals stay cheap.
 #
-# Two CommandCode-specific notes:
+# CommandCode-specific notes:
 #   * The DeepSeek family is billed off-peak/peak. Peak is 01-04 and 06-10 UTC,
 #     Mon-Fri only (2x). In IST that is 06:30-09:30 and 11:30-15:30, weekdays.
-#   * Four models are free while the preview/capacity lasts. They are used only
-#     for the high-volume, low-stakes slots, and every one of them carries a paid
-#     fallback so the slot keeps working when the free tier ends.
+#   * v0.1.1 removed the free and stealth lanes (`...:free`, `stealth/*`) from every
+#     slot. A lane that is free "while it lasts" can vanish, get rate-limited, or
+#     degrade without warning, and a silently downgraded title or approval check is
+#     worth less than the fraction of a cent it saves. Every slot now names a paid
+#     model with a paid model behind it.
 
 model:
   provider: commandcode
@@ -46,11 +48,11 @@ auxiliary:
     reasoning_effort: low
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash                  # $0.15/$0.50, 1M ctx
+        model: z-ai/glm-5.3-flash                  # $0.15/$0.50, 1M ctx, flat-priced
 
   # Dangerous-command classifier (approvals.mode: smart). A miss here is the
   # expensive kind of miss, so this slot takes the highest-scoring cheap model
-  # in the catalog rather than a free one.
+  # in the catalog rather than a budget one.
   approval:
     provider: commandcode
     model: z-ai/glm-5.3-flash                    # $0.15/$0.50, Intelligence 41.8
@@ -59,59 +61,62 @@ auxiliary:
       - provider: commandcode
         model: deepseek/deepseek-v4.1-flash
 
-  # Everything below is high-volume and low-stakes: a wrong title costs nothing
-  # and a rewritten memory query only has to be a better search string. These
-  # ride the free tier, with a paid cheap lane behind them.
+  # The high-volume, low-stakes slots: a session title, a one-line profile blurb,
+  # a better memory search string. Each turns a few thousand input tokens into a
+  # handful of output tokens, so input price dominates the bill — and `gpt-6-luna`
+  # has the cheapest input of any scored model in the catalog ($0.10/M, cache read
+  # $0.01), at $0.50/M out.
   title_generation:
     provider: commandcode
-    model: inclusionai/ling-3.1-flash:free       # free, 262K ctx
+    model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
         model: z-ai/glm-5.3-flash
   skills_hub:
     provider: commandcode
-    model: inclusionai/ling-3.1-flash:free
+    model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
         model: z-ai/glm-5.3-flash
   mcp:
     provider: commandcode
-    model: inclusionai/ling-3.1-flash:free
+    model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
         model: z-ai/glm-5.3-flash
   profile_describer:
     provider: commandcode
-    model: inclusionai/ling-3.1-flash:free
+    model: gpt-6-luna
     fallback_chain:
-      - provider: commandcode
-        model: z-ai/glm-5.3-flash
-  triage_specifier:
-    provider: commandcode
-    model: inclusionai/ling-3.1-flash:free
-    fallback_chain:
-      - provider: commandcode
-        model: inclusionai/ling-3.0-flash-sante:free   # second free lane before paying
       - provider: commandcode
         model: z-ai/glm-5.3-flash
   monitor:
     provider: commandcode
-    model: inclusionai/ling-3.1-flash:free
+    model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
         model: z-ai/glm-5.3-flash
   tts_audio_tags:
     provider: commandcode
-    model: inclusionai/ling-3.1-flash:free
+    model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
         model: z-ai/glm-5.3-flash
   memory_query_rewrite:
     provider: commandcode
-    model: inclusionai/ling-3.1-flash:free
+    model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
         model: z-ai/glm-5.3-flash
+
+  # This one expands a one-liner into a written spec, so it produces real output
+  # rather than a few tokens and gets the higher-scoring cheap model instead.
+  triage_specifier:
+    provider: commandcode
+    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, Intelligence 41.8
+    fallback_chain:
+      - provider: commandcode
+        model: deepseek/deepseek-v4.1-flash
 
   # Left on "auto" (= the main model) on purpose, because these shape what the
   # agent keeps and plans rather than how fast it runs:
