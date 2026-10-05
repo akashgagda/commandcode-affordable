@@ -1,0 +1,122 @@
+# commandcode-affordable v0.1.0
+# Every model below is a CommandCode model id, exactly as
+# https://api.commandcode.ai/provider/v1/models returns it.
+# Prices are CommandCode's published list prices, read 2026-10-05 from
+# https://commandcode.ai/models — they change, so check before trusting a number.
+#
+# Why this file exists: auxiliary.<task>.provider "auto" routes every side task to
+# your MAIN model. Pinning them here means you can /model up to an expensive model
+# for a hard turn while vision, compression, titles and approvals stay cheap.
+#
+# Two CommandCode-specific notes:
+#   * The DeepSeek family is billed off-peak/peak. Peak is 01-04 and 06-10 UTC,
+#     Mon-Fri only (2x). In IST that is 06:30-09:30 and 11:30-15:30, weekdays.
+#   * Four models are free while the preview/capacity lasts. They are used only
+#     for the high-volume, low-stakes slots, and every one of them carries a paid
+#     fallback so the slot keeps working when the free tier ends.
+
+model:
+  provider: commandcode
+  default: deepseek/deepseek-v4.1-flash            # $0.15/$0.60 per M, cache read $0.003, 1M ctx; /model up for hard turns
+
+display:
+  show_cost: true                                  # $ in the status bar, so spend is visible
+
+auxiliary:
+  # Image analysis (vision_analyze + browser screenshots). An explicit vision
+  # backend also sends images through this describer even when the main model
+  # claims native vision (agent.image_input_mode: auto).
+  vision:
+    provider: commandcode
+    model: deepseek/deepseek-v4-flash-vision-exp   # $0.15/$0.60, cache read $0.003, 1M ctx
+    fallback_chain:
+      - provider: commandcode
+        model: google/gemini-3.5-flash-lite        # $0.30/$2.50 — pricier, used only if the DeepSeek vision lane fails
+      - provider: commandcode
+        model: google/gemini-3.1-flash-lite        # $0.25/$1.50
+
+  # Context compression is the session's memory of itself, so this slot buys
+  # fact retention rather than the absolute cheapest lane. DeepSeek V4.1 Flash
+  # scores 39.5 on CommandCode's published Intelligence Index, the highest of
+  # the sub-$0.20/M input models there, and its $0.003 cache read makes the
+  # repeated re-read of a long session cheap.
+  compression:
+    provider: commandcode
+    model: deepseek/deepseek-v4.1-flash
+    reasoning_effort: low
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash                  # $0.15/$0.50, 1M ctx
+
+  # Dangerous-command classifier (approvals.mode: smart). A miss here is the
+  # expensive kind of miss, so this slot takes the highest-scoring cheap model
+  # in the catalog rather than a free one.
+  approval:
+    provider: commandcode
+    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, Intelligence 41.8
+    reasoning_effort: low
+    fallback_chain:
+      - provider: commandcode
+        model: deepseek/deepseek-v4.1-flash
+
+  # Everything below is high-volume and low-stakes: a wrong title costs nothing
+  # and a rewritten memory query only has to be a better search string. These
+  # ride the free tier, with a paid cheap lane behind them.
+  title_generation:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free       # free, 262K ctx
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+  skills_hub:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+  mcp:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+  profile_describer:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+  triage_specifier:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free
+    fallback_chain:
+      - provider: commandcode
+        model: inclusionai/ling-3.0-flash-sante:free   # second free lane before paying
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+  monitor:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+  tts_audio_tags:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+  memory_query_rewrite:
+    provider: commandcode
+    model: inclusionai/ling-3.1-flash:free
+    fallback_chain:
+      - provider: commandcode
+        model: z-ai/glm-5.3-flash
+
+  # Left on "auto" (= the main model) on purpose, because these shape what the
+  # agent keeps and plans rather than how fast it runs:
+  #   background_review - writes your memory and skills; on auto it replays the
+  #                       conversation on a warm prompt cache.
+  #   curator           - consolidates skills.
+  #   kanban_decomposer, goal_judge - planning calls where quality pays for itself.
+  #   review            - the /review subagent; give it the model you trust.
