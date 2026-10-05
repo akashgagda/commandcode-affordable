@@ -37,6 +37,29 @@ hermes profile install github.com/akashgagda/commandcode-affordable --alias
 CommandCode API access needs a plan that exposes the API — the Provider (pay as
 you go, $15/mo) or GOAT/Pro/Max. the $1 Go plan has no API access.
 
+`--alias` must be passed at install time to get the shell wrapper; adding it later
+is `hermes profile alias commandcode-affordable`.
+
+## update
+
+this is a distribution, so it updates itself:
+
+```bash
+hermes profile update commandcode-affordable
+```
+
+`update` replaces the files this distribution owns (`README.md`, `LICENSE`) and
+**preserves `config.yaml`**, so any pins you edited yourself survive. the flip side
+is that an upstream *pin* change will not reach you on a plain update:
+
+```bash
+hermes profile update commandcode-affordable --force-config
+```
+
+`--force-config` overwrites `config.yaml` with the shipped version, so your own pin
+edits revert to the profile's defaults. memories, sessions, `.env` and credentials
+are never touched by either form — that includes the API key `setup` wrote.
+
 ## what is set
 
 - main model: `deepseek/deepseek-v4.1-flash-fast`. **$0.16 in / $0.58 out per
@@ -59,7 +82,10 @@ you go, $15/mo) or GOAT/Pro/Max. the $1 Go plan has no API access.
   and it costs roughly 2.5× its slower sibling `z-ai/glm-5.3-flash`
   ($0.15/$0.50, published Intelligence Index 41.8). if you would rather have the
   cheaper scored model for this slot, `/model` does not move aux tasks: edit
-  `auxiliary.approval.model` back to the sibling.
+  `auxiliary.approval.model` back to the sibling. note this slot and
+  `triage_specifier` are the only two that cost **more** than the `auto` behaviour
+  they replaced: FlashX is ~2.3× the main model off-peak, though only ~1.16× during
+  peak, because the DeepSeek lanes double and FlashX does not.
 - titles, skills hub, MCP dispatch, profile descriptions, mail scoring, TTS audio
   tags and memory query rewrite: `gpt-6-luna` — **$0.10 in / $0.50 out per million,
   cache read $0.01**, the cheapest input price of any scored model in the catalog.
@@ -70,7 +96,8 @@ you go, $15/mo) or GOAT/Pro/Max. the $1 Go plan has no API access.
 - every pinned slot carries a paid model behind it: `z-ai/glm-5.3-flashx` for the
   `gpt-6-luna` slots, `deepseek/deepseek-v4.1-flash-fast` for `triage_specifier`.
 - **no free or stealth lanes.** the free tier is not used anywhere (see changelog).
-- `display.show_cost: true`, so spend shows in the status bar.
+- `display.show_cost: true` — set, but **it stays empty on CommandCode** (no
+  provider pricing to read). see [cost visibility](#cost-visibility).
 
 these stay on your main model on purpose: `background_review` (it writes your
 memory and skills), `curator`, `kanban_decomposer`, `goal_judge` and `review`.
@@ -82,10 +109,17 @@ CommandCode bills the **DeepSeek family by time of day**, and the off-peak rate 
 the one you see on the models page. peak is **01–04 and 06–10 UTC, Monday to
 Friday only**, at 2×:
 
-| band | hours | input $/M | output $/M |
-|---|---|---|---|
-| off-peak | 17h/day | $0.15 | $0.60 |
-| peak | 01–04 & 06–10 UTC, Mon–Fri | $0.30 | $1.20 |
+| lane | band | hours | input $/M | output $/M | cache read $/M |
+|---|---|---|---|---|---|
+| main + compression | off-peak | 17h/day | $0.16 | $0.58 | $0.016 |
+| main + compression | peak | 01–04 & 06–10 UTC, Mon–Fri | $0.32 | $1.16 | $0.032 |
+| vision | off-peak | 17h/day | $0.15 | $0.60 | $0.003 |
+| vision | peak | 01–04 & 06–10 UTC, Mon–Fri | $0.30 | $1.20 | $0.006 |
+
+the two DeepSeek lanes do **not** share a price. $0.15/$0.60 is the *vision* lane
+(and was the main model before v0.1.2 replaced it with the fast tier) — reading that
+row for the main model understates its input price and hides its 5× worse cache
+read. read the row for the lane you are asking about.
 
 for IST that is **06:30–09:30 and 11:30–15:30, weekdays** — both right in the
 working day. weekends are always off-peak. `z-ai/glm-5.3-flashx`, `gpt-6-luna`,
@@ -94,6 +128,28 @@ affected; only the DeepSeek lanes (main, vision, compression) are.
 
 if you want a flat main model instead, `/model` over to `z-ai/glm-5.3-flashx`
 ($0.37/$1.25 flat, 1M context) — the side tasks do not move.
+
+### cost visibility
+
+`display.show_cost: true` is set in `config.yaml`, but on CommandCode there is
+nothing for it to display. Hermes prices a model from the provider's own catalog,
+and `provider/v1/models` publishes **no pricing fields at all** — each entry is only
+`id`, `name`, `object`, `created`, `owned_by`, `context_length` and
+`supported_endpoints`. the completions `usage` block carries token counts and no
+`cost` either.
+
+so every CommandCode session is recorded as unpriced. verified on a live session
+(2026-10-05): `estimated_cost_usd` = `0.0`, `cost_status` = `unknown`, `cost_source`
+= `none`. Hermes' pricing chain (OpenRouter adapter → bundled docs table → endpoint
+metadata → models.dev) has no CommandCode source to fall back to, so this holds for
+every pinned slot however cheap it is.
+
+**to see real spend, use CommandCode's own account page:
+<https://commandcode.ai/settings/usage>** (sign-in required). every figure in this
+README is a list price read from the model pages — none of it is a measured bill.
+
+leaving `show_cost: true` in place is harmless: it costs nothing and starts working
+by itself if CommandCode ever serves pricing.
 
 ## keep your own profile instead
 
@@ -131,6 +187,10 @@ on 2026-10-05:
 - **ids and context windows** read from the public models endpoint,
   `https://api.commandcode.ai/provider/v1/models` (85 models), so every id in
   `config.yaml` is the id the API itself returns.
+- **price bands**, not just headline rates: each model page carries a band table
+  under a "price bands" heading, and the headline figure is the *off-peak* one. the
+  main and vision lanes have different bands, and the peak columns are where the 2×
+  comes from. v0.1.3's peak table is read from those tables.
 - **prices and Intelligence Index scores** read from the models table and the
   individual model pages on `https://commandcode.ai/models`. the one score quoted
   here as a comparison (39.5 for `deepseek-v4.1-flash`, 41.8 for `z-ai/glm-5.3-flash`,
@@ -164,6 +224,33 @@ cents of credits — would replace this section with real results; ask if you wa
 that run before trusting the pins.
 
 ## changelog
+
+### v0.1.3 — 2026-10-05
+
+- **accuracy pass. no pins changed** — `config.yaml`'s only edit is its version
+  header, so a plain `hermes profile update` is enough; `--force-config` is not
+  needed and would only reset that comment.
+- **the peak-hour table was wrong.** it quoted $0.15/$0.60 off-peak and $0.30/$1.20
+  peak, which are the *vision* lane's rates — and were the main model's rates before
+  v0.1.2 moved it to the fast tier. the pinned main and compression model is
+  `deepseek/deepseek-v4.1-flash-fast` at **$0.16/$0.58** off-peak and
+  **$0.32/$1.16** peak. the table now lists both DeepSeek lanes separately and adds
+  the cache-read column ($0.016/$0.032 for the main lane), because cache reads are
+  what most of an agent loop's input actually is.
+- **`display.show_cost: true` does not show spend on CommandCode.** the old bullet
+  claimed it does. it cannot: `provider/v1/models` publishes no pricing and the
+  completions `usage` block carries no `cost`, so Hermes records every session with
+  `cost_status: unknown` / `cost_source: none` / `estimated_cost_usd: 0.0`. a new
+  [cost visibility](#cost-visibility) section states the reason and points at
+  <https://commandcode.ai/settings/usage> for real spend. the setting itself is kept
+  — it is inert, and correct if the provider ever serves pricing.
+- **stated the approval/triage cost against the main model**, not only against their
+  GLM sibling. FlashX is ~2.3× the main model off-peak (~1.16× at peak, where
+  DeepSeek doubles and FlashX is flat). the old text compared FlashX only to the
+  cheaper `z-ai/glm-5.3-flash`, which hides that these two slots are the only ones
+  costing more than the `auto` behaviour they replaced.
+- **added an update section**, including that a plain `update` preserves
+  `config.yaml` and so will not deliver upstream pin changes.
 
 ### v0.1.2 — 2026-10-05
 
