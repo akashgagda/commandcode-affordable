@@ -76,24 +76,24 @@ are never touched by either form — that includes the API key `setup` wrote.
 - compression: `deepseek/deepseek-v4.1-flash-fast` at low reasoning. the compression
   summary is what the session remembers of itself, so this slot stays on the same
   DeepSeek V4.1 family as the main model instead of dropping to a cheaper lane.
-- approval classifier: `z-ai/glm-5.3-flashx` at low reasoning. **$0.37/$1.25, cache
-  read $0.075, 1M context**. this is the *fast* tier of GLM-5.3 and CommandCode has
-  not scored it, so it is chosen for latency, not for a published accuracy gain —
-  and it costs roughly 2.5× its slower sibling `z-ai/glm-5.3-flash`
-  ($0.15/$0.50, published Intelligence Index 41.8). if you would rather have the
-  cheaper scored model for this slot, `/model` does not move aux tasks: edit
-  `auxiliary.approval.model` back to the sibling. note this slot and
-  `triage_specifier` are the only two that cost **more** than the `auto` behaviour
-  they replaced: FlashX is ~2.3× the main model off-peak, though only ~1.16× during
-  peak, because the DeepSeek lanes double and FlashX does not.
+- approval classifier: `z-ai/glm-5.3-flash` at low reasoning. **$0.15/$0.50, cache
+  read $0.03, 1M context, published Intelligence Index 41.8**. v0.1.0–v0.1.3 used the
+  *fast* tier `z-ai/glm-5.3-flashx` ($0.37/$1.25, cache read $0.07, **not scored**)
+  and paid ~2.5× for latency alone; v0.1.4 takes the sibling instead, which is
+  cheaper on all three rates *and* scored. the cost is latency — FlashX is the faster
+  tier, so if approval lag ever shows up, FlashX is the deliberate step back up.
+  worth knowing: against the `auto` behaviour it replaced (the main model,
+  $0.16/$0.58 with cache read $0.016) Flash is cheaper on input and output but
+  ~1.9× its **cache-read** rate off-peak, so whether this slot wins per call depends
+  on how much of the classifier's prompt is a cache hit.
 - titles, skills hub, MCP dispatch, profile descriptions, mail scoring, TTS audio
   tags and memory query rewrite: `gpt-6-luna` — **$0.10 in / $0.50 out per million,
   cache read $0.01**, the cheapest input price of any scored model in the catalog.
   these calls turn a few thousand input tokens into a handful of output tokens, so
   input price dominates their bill.
 - kanban triage (`triage_specifier`) writes a spec rather than a few tokens, so it
-  gets `z-ai/glm-5.3-flashx` instead.
-- every pinned slot carries a paid model behind it: `z-ai/glm-5.3-flashx` for the
+  gets the same `z-ai/glm-5.3-flash` as approval.
+- every pinned slot carries a paid model behind it: `z-ai/glm-5.3-flash` for the
   `gpt-6-luna` slots, `deepseek/deepseek-v4.1-flash-fast` for `triage_specifier`.
 - **no free or stealth lanes.** the free tier is not used anywhere (see changelog).
 - `display.show_cost: true` — set, but **it stays empty on CommandCode** (no
@@ -122,12 +122,15 @@ row for the main model understates its input price and hides its 5× worse cache
 read. read the row for the lane you are asking about.
 
 for IST that is **06:30–09:30 and 11:30–15:30, weekdays** — both right in the
-working day. weekends are always off-peak. `z-ai/glm-5.3-flashx`, `gpt-6-luna`,
+working day. weekends are always off-peak. `z-ai/glm-5.3-flash`, `gpt-6-luna`,
 `Qwen/Qwen3.8-Flash` and `xiaomi/mimo-v2.6-flash` are flat-priced, so they are not
 affected; only the DeepSeek lanes (main, vision, compression) are.
 
-if you want a flat main model instead, `/model` over to `z-ai/glm-5.3-flashx`
-($0.37/$1.25 flat, 1M context) — the side tasks do not move.
+if you want a flat main model instead, `/model` over to `z-ai/glm-5.3-flash`
+($0.15/$0.50 flat, 1M context, index 41.8) — the side tasks do not move. it
+therefore costs *less* than the pinned main model on input ($0.15 vs $0.16) and
+output ($0.50 vs $0.58), and being flat it never doubles in the peak windows. the
+one rate the DeepSeek lane wins is cache read off-peak ($0.016 vs $0.03).
 
 ### cost visibility
 
@@ -164,7 +167,7 @@ hermes config set auxiliary.vision.model deepseek/deepseek-v4-flash-vision-exp
 hermes config set auxiliary.compression.provider commandcode
 hermes config set auxiliary.compression.model deepseek/deepseek-v4.1-flash-fast
 hermes config set auxiliary.approval.provider commandcode
-hermes config set auxiliary.approval.model z-ai/glm-5.3-flashx
+hermes config set auxiliary.approval.model z-ai/glm-5.3-flash
 hermes config set auxiliary.title_generation.provider commandcode
 hermes config set auxiliary.title_generation.model gpt-6-luna
 hermes config set auxiliary.skills_hub.provider commandcode
@@ -194,10 +197,10 @@ on 2026-10-05:
 - **prices and Intelligence Index scores** read from the models table and the
   individual model pages on `https://commandcode.ai/models`. the one score quoted
   here as a comparison (39.5 for `deepseek-v4.1-flash`, 41.8 for `z-ai/glm-5.3-flash`,
-  34.8 for the vision lane) is CommandCode's own published number. the *fast* tiers
-  this profile actually uses — `deepseek-v4.1-flash-fast` and `z-ai/glm-5.3-flashx` —
-  are both listed by CommandCode as **not yet scored**; no published accuracy figure
-  is claimed for either.
+  34.8 for the vision lane) is CommandCode's own published number. the fast tier
+  this profile actually uses — `deepseek-v4.1-flash-fast` — is listed by CommandCode
+  as **not yet scored**; no published accuracy figure is claimed for it. the GLM
+  slots use the scored `z-ai/glm-5.3-flash` (41.8).
 - **no free lanes**: CommandCode lists four models as free "while it lasts"
   (`inclusionai/ling-3.1-flash:free`, `inclusionai/ling-3.0-flash-sante:free`,
   `stealth/space-bunny-alpha`, `poolside/laguna-s-2.1-free`). none is used here. a
@@ -224,6 +227,25 @@ cents of credits — would replace this section with real results; ask if you wa
 that run before trusting the pins.
 
 ## changelog
+
+### v0.1.4 — 2026-10-05
+
+- **the GLM lanes moved back to `z-ai/glm-5.3-flash`**, undoing the v0.1.2 move to
+  FlashX — `approval`, `triage_specifier`, and the fallback behind each `gpt-6-luna`
+  slot and compression. this is a **pin change**: a plain `hermes profile update`
+  will not deliver it, because `update` preserves `config.yaml`. use
+  `hermes profile update commandcode-affordable --force-config`.
+- why: Flash is cheaper than FlashX on *every* rate — $0.15/$0.50 vs $0.37/$1.25,
+  cache read $0.03 vs $0.07 — and unlike FlashX it carries a published Intelligence
+  Index (41.8, vs not scored). v0.1.2's trade bought latency at roughly 2.5× the
+  price; that reversed here because a scored model being also the cheaper one leaves
+  no argument for the other. the cost, stated plainly: **Flash is the slower tier**,
+  and approval is the one slot where latency is felt.
+- **no longer a cost increase over `auto`** on input and output: `z-ai/glm-5.3-flash`
+  ($0.15/$0.50) undercuts both FlashX and the main model `deepseek-v4.1-flash-fast`
+  ($0.16/$0.58). the exception is cache read off-peak, where the DeepSeek lane is
+  cheaper ($0.016 vs $0.03) — so an approval check that is mostly a cache hit can
+  still cost slightly more than `auto` did.
 
 ### v0.1.3 — 2026-10-05
 

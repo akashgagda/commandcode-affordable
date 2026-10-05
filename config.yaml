@@ -1,4 +1,4 @@
-# commandcode-affordable v0.1.3
+# commandcode-affordable v0.1.4
 # Every model below is a CommandCode model id, exactly as
 # https://api.commandcode.ai/provider/v1/models returns it.
 # Prices are CommandCode's published list prices, read 2026-10-05 from
@@ -16,6 +16,11 @@
 #     and both cost more than the tier below them: main $0.16/$0.58 vs $0.15/$0.60
 #     (cache read $0.016 vs $0.003), FlashX $0.37/$1.25 vs $0.15/$0.50. That is a
 #     deliberate latency-for-price trade, not a mistake.
+#   * v0.1.4 reverted the GLM lanes to GLM-5.3 *Flash*, undoing the v0.1.2 move to
+#     FlashX. Flash is cheaper on every axis ($0.15/$0.50, cache read $0.03, vs
+#     FlashX's $0.37/$1.25, cache read $0.07) and, unlike FlashX, carries a
+#     published Intelligence Index (41.8, vs not scored). The cost is latency:
+#     FlashX is the faster tier of the family.
 #   * v0.1.1 removed the free and stealth lanes (`...:free`, `stealth/*`) from every
 #     slot. A lane that is free "while it lasts" can vanish, get rate-limited, or
 #     degrade without warning, and a silently downgraded title or approval check is
@@ -27,7 +32,7 @@ model:
   default: deepseek/deepseek-v4.1-flash-fast            # $0.16/$0.58 per M, cache read $0.016, 1M ctx; 2x in peak hours; /model up for hard turns
 
 display:
-  show_cost: true                                  # $ in the status bar, so spend is visible
+  show_cost: true                                  # set, but inert on CommandCode — no provider pricing to read; see README "cost visibility"
 
 auxiliary:
   # Image analysis (vision_analyze + browser screenshots). An explicit vision
@@ -54,17 +59,16 @@ auxiliary:
     reasoning_effort: low
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx                  # $0.37/$1.25, 1M ctx, flat-priced
+        model: z-ai/glm-5.3-flash                   # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
 
   # Dangerous-command classifier (approvals.mode: smart). A miss here is the
-  # expensive kind of miss, so this slot takes the fastest tier rather than the
-  # cheapest. The trade, stated plainly: GLM-5.3 FlashX is $0.37/$1.25 and is not
-  # yet scored, while its slower sibling z-ai/glm-5.3-flash is $0.15/$0.50 at a
-  # published Intelligence Index of 41.8. Switch back to the sibling if the
-  # latency is not worth roughly 2.5x.
+  # expensive kind of miss, so this is the one slot where latency was deliberately
+  # traded away: v0.1.0-v0.1.3 took the fastest tier (FlashX), v0.1.4 takes the
+  # scored and strictly cheaper sibling instead. If a slower classifier ever shows
+  # up as approval lag, FlashX is the deliberate step back up.
   approval:
     provider: commandcode
-    model: z-ai/glm-5.3-flashx                    # $0.37/$1.25, 1M ctx, unscored
+    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
     reasoning_effort: low
     fallback_chain:
       - provider: commandcode
@@ -80,49 +84,49 @@ auxiliary:
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx
+        model: z-ai/glm-5.3-flash
   skills_hub:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx
+        model: z-ai/glm-5.3-flash
   mcp:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx
+        model: z-ai/glm-5.3-flash
   profile_describer:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx
+        model: z-ai/glm-5.3-flash
   monitor:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx
+        model: z-ai/glm-5.3-flash
   tts_audio_tags:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx
+        model: z-ai/glm-5.3-flash
   memory_query_rewrite:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flashx
+        model: z-ai/glm-5.3-flash
 
   # This one expands a one-liner into a written spec, so it produces real output
-  # rather than a few tokens and gets the higher-scoring cheap model instead.
+  # rather than a few tokens, and gets the same scored model as approval.
   triage_specifier:
     provider: commandcode
-    model: z-ai/glm-5.3-flashx                    # $0.37/$1.25, 1M ctx, unscored
+    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
     fallback_chain:
       - provider: commandcode
         model: deepseek/deepseek-v4.1-flash-fast
