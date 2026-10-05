@@ -1,4 +1,4 @@
-# commandcode-affordable v0.1.1
+# commandcode-affordable v0.1.2
 # Every model below is a CommandCode model id, exactly as
 # https://api.commandcode.ai/provider/v1/models returns it.
 # Prices are CommandCode's published list prices, read 2026-10-05 from
@@ -11,6 +11,11 @@
 # CommandCode-specific notes:
 #   * The DeepSeek family is billed off-peak/peak. Peak is 01-04 and 06-10 UTC,
 #     Mon-Fri only (2x). In IST that is 06:30-09:30 and 11:30-15:30, weekdays.
+#   * v0.1.2 moved the main and compression lanes to the DeepSeek V4.1 *fast* tier
+#     and the GLM lanes to GLM-5.3 *FlashX*. Both are the faster tier of a family,
+#     and both cost more than the tier below them: main $0.16/$0.58 vs $0.15/$0.60
+#     (cache read $0.016 vs $0.003), FlashX $0.37/$1.25 vs $0.15/$0.50. That is a
+#     deliberate latency-for-price trade, not a mistake.
 #   * v0.1.1 removed the free and stealth lanes (`...:free`, `stealth/*`) from every
 #     slot. A lane that is free "while it lasts" can vanish, get rate-limited, or
 #     degrade without warning, and a silently downgraded title or approval check is
@@ -19,7 +24,7 @@
 
 model:
   provider: commandcode
-  default: deepseek/deepseek-v4.1-flash            # $0.15/$0.60 per M, cache read $0.003, 1M ctx; /model up for hard turns
+  default: deepseek/deepseek-v4.1-flash-fast            # $0.16/$0.58 per M, cache read $0.016, 1M ctx; 2x in peak hours; /model up for hard turns
 
 display:
   show_cost: true                                  # $ in the status bar, so spend is visible
@@ -38,28 +43,32 @@ auxiliary:
         model: google/gemini-3.1-flash-lite        # $0.25/$1.50
 
   # Context compression is the session's memory of itself, so this slot buys
-  # fact retention rather than the absolute cheapest lane. DeepSeek V4.1 Flash
-  # scores 39.5 on CommandCode's published Intelligence Index, the highest of
-  # the sub-$0.20/M input models there, and its $0.003 cache read makes the
-  # repeated re-read of a long session cheap.
+  # fact retention rather than the absolute cheapest lane. It stays on the same
+  # DeepSeek V4.1 family as the main model — $0.16/$0.58 per M, with a $0.016
+  # cache read keeping the repeated re-read of a long session cheap. CommandCode
+  # publishes no Intelligence Index for the fast tier, so this is a family
+  # choice rather than a scored one.
   compression:
     provider: commandcode
-    model: deepseek/deepseek-v4.1-flash
+    model: deepseek/deepseek-v4.1-flash-fast
     reasoning_effort: low
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash                  # $0.15/$0.50, 1M ctx, flat-priced
+        model: z-ai/glm-5.3-flashx                  # $0.37/$1.25, 1M ctx, flat-priced
 
   # Dangerous-command classifier (approvals.mode: smart). A miss here is the
-  # expensive kind of miss, so this slot takes the highest-scoring cheap model
-  # in the catalog rather than a budget one.
+  # expensive kind of miss, so this slot takes the fastest tier rather than the
+  # cheapest. The trade, stated plainly: GLM-5.3 FlashX is $0.37/$1.25 and is not
+  # yet scored, while its slower sibling z-ai/glm-5.3-flash is $0.15/$0.50 at a
+  # published Intelligence Index of 41.8. Switch back to the sibling if the
+  # latency is not worth roughly 2.5x.
   approval:
     provider: commandcode
-    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, Intelligence 41.8
+    model: z-ai/glm-5.3-flashx                    # $0.37/$1.25, 1M ctx, unscored
     reasoning_effort: low
     fallback_chain:
       - provider: commandcode
-        model: deepseek/deepseek-v4.1-flash
+        model: deepseek/deepseek-v4.1-flash-fast
 
   # The high-volume, low-stakes slots: a session title, a one-line profile blurb,
   # a better memory search string. Each turns a few thousand input tokens into a
@@ -71,52 +80,52 @@ auxiliary:
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash
+        model: z-ai/glm-5.3-flashx
   skills_hub:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash
+        model: z-ai/glm-5.3-flashx
   mcp:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash
+        model: z-ai/glm-5.3-flashx
   profile_describer:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash
+        model: z-ai/glm-5.3-flashx
   monitor:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash
+        model: z-ai/glm-5.3-flashx
   tts_audio_tags:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash
+        model: z-ai/glm-5.3-flashx
   memory_query_rewrite:
     provider: commandcode
     model: gpt-6-luna
     fallback_chain:
       - provider: commandcode
-        model: z-ai/glm-5.3-flash
+        model: z-ai/glm-5.3-flashx
 
   # This one expands a one-liner into a written spec, so it produces real output
   # rather than a few tokens and gets the higher-scoring cheap model instead.
   triage_specifier:
     provider: commandcode
-    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, Intelligence 41.8
+    model: z-ai/glm-5.3-flashx                    # $0.37/$1.25, 1M ctx, unscored
     fallback_chain:
       - provider: commandcode
-        model: deepseek/deepseek-v4.1-flash
+        model: deepseek/deepseek-v4.1-flash-fast
 
   # Left on "auto" (= the main model) on purpose, because these shape what the
   # agent keeps and plans rather than how fast it runs:
