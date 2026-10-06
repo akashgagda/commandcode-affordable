@@ -1,7 +1,7 @@
-# commandcode-affordable v0.1.4
+# commandcode-affordable v0.1.5
 # Every model below is a CommandCode model id, exactly as
 # https://api.commandcode.ai/provider/v1/models returns it.
-# Prices are CommandCode's published list prices, read 2026-10-05 from
+# Prices are CommandCode's published list prices, read 2026-10-06 from
 # https://commandcode.ai/models — they change, so check before trusting a number.
 #
 # Why this file exists: auxiliary.<task>.provider "auto" routes every side task to
@@ -9,27 +9,29 @@
 # for a hard turn while vision, compression, titles and approvals stay cheap.
 #
 # CommandCode-specific notes:
-#   * The DeepSeek family is billed off-peak/peak. Peak is 01-04 and 06-10 UTC,
+#   * Only the DeepSeek family is billed off-peak/peak. Peak is 01-04 and 06-10 UTC,
 #     Mon-Fri only (2x). In IST that is 06:30-09:30 and 11:30-15:30, weekdays.
-#   * v0.1.2 moved the main and compression lanes to the DeepSeek V4.1 *fast* tier
-#     and the GLM lanes to GLM-5.3 *FlashX*. Both are the faster tier of a family,
-#     and both cost more than the tier below them: main $0.16/$0.58 vs $0.15/$0.60
-#     (cache read $0.016 vs $0.003), FlashX $0.37/$1.25 vs $0.15/$0.50. That is a
-#     deliberate latency-for-price trade, not a mistake.
+#     The main, compression, approval, triage and title lanes are all flat-priced
+#     (MiMo, GLM, GPT-6 Luna), so they never double. Only the vision lane, which is
+#     DeepSeek, still has a peak band.
+#   * v0.1.5 moved the main, compression, approval and triage lanes off the DeepSeek
+#     V4.1 fast tier and onto xiaomi/mimo-v2.6-flash. It is cheaper on every axis
+#     ($0.14/$0.28, cache read $0.0028 vs $0.16/$0.58, cache read $0.016), carries a
+#     published Intelligence Index (37.9, vs not scored), and — being flat — does not
+#     double during the peak windows listed above. The vision lane is unchanged:
+#     deepseek/deepseek-v4-flash-vision-exp is still the cheapest vision lane.
 #   * v0.1.4 reverted the GLM lanes to GLM-5.3 *Flash*, undoing the v0.1.2 move to
-#     FlashX. Flash is cheaper on every axis ($0.15/$0.50, cache read $0.03, vs
-#     FlashX's $0.37/$1.25, cache read $0.07) and, unlike FlashX, carries a
-#     published Intelligence Index (41.8, vs not scored). The cost is latency:
-#     FlashX is the faster tier of the family.
+#     FlashX. Flash is cheaper on every rate and, unlike FlashX, carries a published
+#     Intelligence Index (41.8). FlashX was the faster tier; Flash is the cheaper one.
 #   * v0.1.1 removed the free and stealth lanes (`...:free`, `stealth/*`) from every
 #     slot. A lane that is free "while it lasts" can vanish, get rate-limited, or
 #     degrade without warning, and a silently downgraded title or approval check is
-#     worth less than the fraction of a cent it saves. Every slot now names a paid
-#     model with a paid model behind it.
+#     worth less than the fraction of a cent it saves. Every slot names a paid
+#     model, and v0.1.5 keeps it that way.
 
 model:
   provider: commandcode
-  default: deepseek/deepseek-v4.1-flash-fast            # $0.16/$0.58 per M, cache read $0.016, 1M ctx; 2x in peak hours; /model up for hard turns
+  default: xiaomi/mimo-v2.6-flash                       # $0.14/$0.28 per M, cache read $0.0028, 1.05M ctx, index 37.9, FLAT (no peak band); /model up for hard turns
 
 display:
   show_cost: true                                  # set, but inert on CommandCode — no provider pricing to read; see README "cost visibility"
@@ -40,7 +42,7 @@ auxiliary:
   # claims native vision (agent.image_input_mode: auto).
   vision:
     provider: commandcode
-    model: deepseek/deepseek-v4-flash-vision-exp   # $0.15/$0.60, cache read $0.003, 1M ctx
+    model: deepseek/deepseek-v4-flash-vision-exp   # $0.15/$0.60, cache read $0.003, 1M ctx, index 34.8; 2x in the peak windows above
     fallback_chain:
       - provider: commandcode
         model: google/gemini-3.5-flash-lite        # $0.30/$2.50 — pricier, used only if the DeepSeek vision lane fails
@@ -48,37 +50,35 @@ auxiliary:
         model: google/gemini-3.1-flash-lite        # $0.25/$1.50
 
   # Context compression is the session's memory of itself, so this slot buys
-  # fact retention rather than the absolute cheapest lane. It stays on the same
-  # DeepSeek V4.1 family as the main model — $0.16/$0.58 per M, with a $0.016
-  # cache read keeping the repeated re-read of a long session cheap. CommandCode
-  # publishes no Intelligence Index for the fast tier, so this is a family
-  # choice rather than a scored one.
+  # fact retention rather than the absolute cheapest lane. It rides the same model
+  # as the main lane, and that model is scored (37.9) and flat-priced, so the
+  # repeated re-read of a long session costs $0.0028 per M rather than the
+  # DeepSeek lane's $0.016 — 5.7x cheaper on the rate most of a summary is made of.
   compression:
     provider: commandcode
-    model: deepseek/deepseek-v4.1-flash-fast
+    model: xiaomi/mimo-v2.6-flash
     reasoning_effort: low
     fallback_chain:
       - provider: commandcode
         model: z-ai/glm-5.3-flash                   # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
 
   # Dangerous-command classifier (approvals.mode: smart). A miss here is the
-  # expensive kind of miss, so this is the one slot where latency was deliberately
-  # traded away: v0.1.0-v0.1.3 took the fastest tier (FlashX), v0.1.4 takes the
-  # scored and strictly cheaper sibling instead. If a slower classifier ever shows
-  # up as approval lag, FlashX is the deliberate step back up.
+  # expensive kind of miss, so this slot takes the scored lane rather than the
+  # cheapest one: index 37.9 at $0.14/$0.28, flat-priced, with the higher-scored
+  # GLM-5.3 Flash (41.8) behind it as the fallback.
   approval:
     provider: commandcode
-    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
+    model: xiaomi/mimo-v2.6-flash
     reasoning_effort: low
     fallback_chain:
       - provider: commandcode
-        model: deepseek/deepseek-v4.1-flash-fast
+        model: z-ai/glm-5.3-flash                   # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
 
   # The high-volume, low-stakes slots: a session title, a one-line profile blurb,
   # a better memory search string. Each turns a few thousand input tokens into a
   # handful of output tokens, so input price dominates the bill — and `gpt-6-luna`
   # has the cheapest input of any scored model in the catalog ($0.10/M, cache read
-  # $0.01), at $0.50/M out.
+  # $0.01), at $0.50/M out. It is flat-priced, so it never doubles.
   title_generation:
     provider: commandcode
     model: gpt-6-luna
@@ -123,13 +123,13 @@ auxiliary:
         model: z-ai/glm-5.3-flash
 
   # This one expands a one-liner into a written spec, so it produces real output
-  # rather than a few tokens, and gets the same scored model as approval.
+  # rather than a few tokens, and takes the same scored lane as approval.
   triage_specifier:
     provider: commandcode
-    model: z-ai/glm-5.3-flash                    # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
+    model: xiaomi/mimo-v2.6-flash                 # $0.14/$0.28, cache read $0.0028, 1.05M ctx, flat-priced, index 37.9
     fallback_chain:
       - provider: commandcode
-        model: deepseek/deepseek-v4.1-flash-fast
+        model: z-ai/glm-5.3-flash                   # $0.15/$0.50, cache read $0.03, 1M ctx, flat-priced, index 41.8
 
   # Left on "auto" (= the main model) on purpose, because these shape what the
   # agent keeps and plans rather than how fast it runs:

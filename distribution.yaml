@@ -1,6 +1,6 @@
 name: commandcode-affordable
-version: 0.1.4
-description: "CommandCode profile tuned for low spend: a low-cost main model, with vision, compression, approvals, titles and the other side tasks pinned to CommandCode's cheapest paid models so their cost does not change when you switch the main model. No free or stealth lanes."
+version: 0.1.5
+description: "CommandCode profile tuned for low spend: the cheapest *scored* lane as the main model, with vision, compression, approvals, titles and the other side tasks pinned to CommandCode's cheapest scored paid models so their cost does not change when you switch the main model. No free or stealth lanes."
 hermes_requires: ">=0.21.0"
 author: "akashgagda"
 license: "MIT"
